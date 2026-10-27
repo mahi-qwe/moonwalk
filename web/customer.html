@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoonWalk · Your table</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="name">…</h1>
+    <span class="sub" id="table"></span>
+  </header>
+
+  <h2>Menu</h2>
+  <div class="panel" id="menu"></div>
+  <div class="row" style="margin-top:12px; border:0">
+    <span class="sub" id="picked">Nothing picked yet</span>
+    <button class="primary" id="place" disabled>Place order</button>
+  </div>
+
+  <h2>Your orders</h2>
+  <div class="list" id="orders"><div class="empty">No orders yet</div></div>
+</main>
+<div id="banner" hidden></div>
+
+<script src="/static/common.js"></script>
+<script>
+// URL: /r/<restaurant>/table/<table>
+const TABLE = decodeURIComponent(location.pathname.split("/")[4] || "");
+const basket = new Map(); // menu item id -> qty
+let menu = [];
+
+document.getElementById("table").textContent = `Table ${TABLE}`;
+
+async function loadMenu() {
+  const r = await api("GET", "");
+  document.getElementById("name").textContent = r.name;
+  document.title = `${r.name} · Table ${TABLE}`;
+  menu = r.menu;
+  renderMenu();
+}
+
+function renderMenu() {
+  document.getElementById("menu").innerHTML = menu.map((m) => `
+    <div class="row">
+      <span>${esc(m.name)}</span>
+      <span class="qty">
+        <button data-dish="${esc(m.id)}" data-step="-1" aria-label="less">−</button>
+        <span>${basket.get(m.id) || 0}</span>
+        <button data-dish="${esc(m.id)}" data-step="1" aria-label="more">+</button>
+      </span>
+    </div>`).join("");
+
+  const count = [...basket.values()].reduce((a, b) => a + b, 0);
+  document.getElementById("picked").textContent = count ? `${count} item${count > 1 ? "s" : ""} picked` : "Nothing picked yet";
+  document.getElementById("place").disabled = count === 0;
+}
+
+document.getElementById("menu").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-dish]");
+  if (!btn) return;
+  const id = btn.dataset.dish;
+  const qty = Math.max(0, Math.min(20, (basket.get(id) || 0) + Number(btn.dataset.step)));
+  qty ? basket.set(id, qty) : basket.delete(id);
+  renderMenu();
+});
+
+document.getElementById("place").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try {
+    const items = [...basket].map(([menu_item_id, qty]) => ({ menu_item_id, qty }));
+    await api("POST", "/orders", { table: TABLE, items });
+    basket.clear();
+    renderMenu();
+    await refresh();
+  } catch (err) {
+    showError(err.message);
+    e.target.disabled = false;
+  }
+});
+
+function statusLine(o) {
+  switch (o.status) {
+    case "ready": return `<div class="clock small" style="color:var(--ok)">Ready, enjoy! 🚀</div>`;
+    case "cancelled": return `<div class="sub">This order was cancelled</div>`;
+  }
+  const cooking = o.status === "cooking";
+  const note = o.almost_ready
+    ? (cooking ? "Almost ready, just a little longer" : "The kitchen is a bit behind, starting soon")
+    : (cooking ? "Being cooked" : "Waiting for the kitchen");
+  return `<div class="clock" data-clock="${o.id}">${mmss(o.remaining_seconds)}</div>
+          <div class="${o.almost_ready ? "note" : "sub"}">${note}</div>
+          <div class="bar"><div data-bar="${o.id}"></div></div>`;
+}
+
+function renderOrders(orders) {
+  const box = document.getElementById("orders");
+  if (!orders.length) { box.innerHTML = `<div class="empty">No orders yet</div>`; return; }
+  // Newest first.
+  box.innerHTML = [...orders].reverse().map((o) => `
+    <div class="panel order">
+      <div class="top"><strong>Order #${o.id}</strong><span class="badge ${o.status}">${o.status}</span></div>
+      <p class="items">${esc(itemsText(o.items))}</p>
+      ${statusLine(o)}
+    </div>`).join("");
+  tickClocks();
+}
+
+async function refresh() {
+  try {
+    const orders = await api("GET", `/tables/${encodeURIComponent(TABLE)}/orders`);
+    trackDeadlines(orders);
+    renderOrders(orders);
+    showError("");
+  } catch (err) {
+    showError(`Can't reach the kitchen (${err.message}), retrying…`); // keep showing the last countdowns
+  }
+}
+
+loadMenu().catch((err) => showError(err.message));
+refresh();
+setInterval(refresh, POLL_MS);
+</script>
+</body>
+</html>

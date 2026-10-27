@@ -1,0 +1,35 @@
+[
+  {
+    "id": "moonwalk",
+    "name": "MoonWalk",
+    "strategy": "adaptive",
+    "stations": [
+      { "id": "grill", "name": "Grill", "capacity": 2 },
+      { "id": "fryer", "name": "Fryer", "capacity": 1 },
+      { "id": "oven",  "name": "Oven",  "capacity": 2 },
+      { "id": "bar",   "name": "Bar",   "capacity": 1 }
+    ],
+    "menu": [
+      { "id": "lunar-burger",   "name": "Lunar Burger",    "station_id": "grill", "prep_seconds": 480 },
+      { "id": "orbit-steak",    "name": "Orbit Steak",     "station_id": "grill", "prep_seconds": 720 },
+      { "id": "crater-fries",   "name": "Crater Fries",    "station_id": "fryer", "prep_seconds": 240 },
+      { "id": "meteor-rings",   "name": "Meteor Rings",    "station_id": "fryer", "prep_seconds": 300 },
+      { "id": "nebula-pizza",   "name": "Nebula Pizza",    "station_id": "oven",  "prep_seconds": 600 },
+      { "id": "galaxy-shake",   "name": "Galaxy Shake",    "station_id": "bar",   "prep_seconds": 120 }
+    ]
+  },
+  {
+    "id": "mars-diner",
+    "name": "Mars Diner",
+    "strategy": "queue",
+    "stations": [
+      { "id": "wok",   "name": "Wok",   "capacity": 3 },
+      { "id": "grill", "name": "Grill", "capacity": 1 }
+    ],
+    "menu": [
+      { "id": "red-noodles", "name": "Red Planet Noodles", "station_id": "wok",   "prep_seconds": 360 },
+      { "id": "rover-rice",  "name": "Rover Fried Rice",   "station_id": "wok",   "prep_seconds": 300 },
+      { "id": "dust-wings",  "name": "Dust Storm Wings",   "station_id": "grill", "prep_seconds": 540 }
+    ]
+  }
+]

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoonWalk · Kitchen</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="name">Kitchen</h1>
+    <label class="sub">Strategy
+      <select id="strategy"></select>
+    </label>
+  </header>
+
+  <h2>Stations</h2>
+  <div class="panel" id="stations"></div>
+
+  <h2>Orders to do</h2>
+  <div class="list" id="orders"><div class="empty">Nothing to cook 🎉</div></div>
+</main>
+<div id="banner" hidden></div>
+
+<script src="/static/common.js"></script>
+<script>
+async function loadStrategies() {
+  const names = await fetch("/api/strategies").then((r) => r.json());
+  document.getElementById("strategy").innerHTML = names.map((n) => `<option>${esc(n)}</option>`).join("");
+}
+
+document.getElementById("strategy").addEventListener("change", async (e) => {
+  try {
+    await api("PUT", "/strategy", { strategy: e.target.value });
+    await refresh();
+  } catch (err) { showError(err.message); }
+});
+
+// speed 1.10 = this station has been running ~10% slower than the menu says.
+function renderRestaurant(r) {
+  document.getElementById("name").textContent = `${r.name} · Kitchen`;
+  document.title = `${r.name} · Kitchen`;
+  const select = document.getElementById("strategy");
+  if (document.activeElement !== select) select.value = r.strategy;
+
+  document.getElementById("stations").innerHTML = r.stations.map((s) => `
+    <div class="row">
+      <span>${esc(s.name)} <span class="sub">×${s.capacity}</span></span>
+      <span class="sub">speed ${s.factor.toFixed(2)} · ${s.samples} learned</span>
+    </div>`).join("");
+}
+
+function renderOrders(orders) {
+  const box = document.getElementById("orders");
+  if (!orders.length) { box.innerHTML = `<div class="empty">Nothing to cook 🎉</div>`; return; }
+  box.innerHTML = orders.map((o) => `
+    <div class="panel order">
+      <div class="top">
+        <strong>#${o.id} · Table ${esc(o.table)}</strong>
+        <span class="badge ${o.status}">${o.status}</span>
+      </div>
+      <p class="items">${o.items.map((it) => `${it.qty}× ${esc(it.name)} <span class="sub">(${esc(it.station_id)})</span>`).join(", ")}</p>
+      <div class="row" style="border:0; margin:0; padding:0">
+        <span class="clock small" data-clock="${o.id}">${mmss(o.remaining_seconds)}</span>
+        ${o.almost_ready ? `<span class="note">overdue</span>` : ""}
+      </div>
+      <div class="actions">
+        ${o.status === "placed" ? `<button class="primary" data-act="start" data-id="${o.id}">Start cooking</button>` : ""}
+        ${o.status === "cooking" ? `<button class="primary" data-act="ready" data-id="${o.id}">Ready</button>` : ""}
+        <button class="danger" data-act="cancel" data-id="${o.id}">Cancel</button>
+      </div>
+    </div>`).join("");
+  tickClocks();
+}
+
+document.getElementById("orders").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await api("POST", `/orders/${btn.dataset.id}/${btn.dataset.act}`);
+    await refresh();
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+  }
+});
+
+async function refresh() {
+  try {
+    const [r, orders] = await Promise.all([api("GET", ""), api("GET", "/orders")]);
+    renderRestaurant(r);
+    trackDeadlines(orders);
+    renderOrders(orders);
+    showError("");
+  } catch (err) {
+    showError(`Can't reach the server (${err.message}), retrying…`);
+  }
+}
+
+loadStrategies().then(refresh).catch((err) => showError(err.message));
+setInterval(refresh, POLL_MS);
+</script>
+</body>
+</html>
